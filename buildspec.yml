@@ -44,7 +44,7 @@ phases:
       # copy infra database creation file in S3
       - aws cloudformation package  --template-file pipeline/database.yml --s3-bucket ${S3_BUCKET} --output-template-file database-pipeline.yml
       # Package the application with AWS SAM
-      - aws cloudformation package --template-file sam.yaml --s3-bucket ${S3_BUCKET} --output-template-file packaged.yml
+      - aws cloudformation package --template-file sam.yml --s3-bucket ${S3_BUCKET} --output-template-file packaged.yml
 
 artifacts:
   files:
