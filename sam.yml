@@ -1,0 +1,127 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: AWS SAM template for bartender hands-on
+Parameters:
+  ParentSamStack:
+    Description: Prefix Stack name of parent Sam stack.
+    Type: String
+Resources:
+  LambdaPostRegistration:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: postRegistration
+      Timeout: 10
+      Runtime: go1.x
+      CodeUri: bin/postRegistration
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName: !Sub ${ParentSamStack}-Registry
+      Environment:
+        Variables:
+          TABLE_REGISTRY: !Sub ${ParentSamStack}-Registry
+      Events:
+        registerPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BartenderServer
+            Path: /registry
+            Method: POST
+  LambdaServeCommandProxy:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: serveCommand
+      Timeout: 10
+      Runtime: go1.x
+      CodeUri: bin/serveCommand
+      Policies:
+      - LambdaInvokePolicy:
+          FunctionName: !Ref LambdaServeUser
+      - DynamoDBCrudPolicy:
+          TableName: !Sub ${ParentSamStack}-Registry
+      Environment:
+        Variables:
+          TABLE_REGISTRY: !Sub ${ParentSamStack}-Registry
+          LAMBDA_SERVE_USER: !Ref ${LambdaServeUser}
+  LambdaServeUser:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: serveUser
+      Timeout: 10
+      Runtime: go1.x
+      CodeUri: bin/serveUser
+  ScheduledRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: "ScheduledRule"
+      ScheduleExpression: "rate(5 minutes)"
+      State: "ENABLED"
+      Targets:
+        -
+          Arn:
+            Fn::GetAtt:
+              - "LambdaServeCommandProxy"
+              - "Arn"
+          Id: "TargetFunctionV1"
+  PermissionForEventsToInvokeLambda:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName:
+        Ref: "LambdaServeCommandProxy"
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn:
+        Fn::GetAtt:
+          - "ScheduledRule"
+          - "Arn"
+  BartenderServer:
+    Type: AWS::Serverless::Api
+    Properties:
+      EndpointConfiguration: REGIONAL
+      Name: Bartender-Server Api
+      DefinitionBody:
+        swagger: "2.0"
+        info:
+          version: "2017-11-09T13:59:26Z"
+          title: Bartender-Server
+        basePath: !Sub "/test"
+        schemes:
+          - "https"
+        paths:
+          /registry:
+            post:
+              summary: Get unattended commands
+              operationId: CommandsGet
+              consumes:
+              - application/json
+              produces:
+              - application/json
+              parameters:
+              - in: body
+                name: idCommand
+                required: true
+                schema:
+                  $ref: '#/definitions/User'
+              responses:
+                200:
+                  description: "200 response"
+                  schema:
+                    $ref: "#/definitions/User"
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: "200"
+                uri:
+                  Fn::Sub: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaPostRegistration.Arn}/invocations"
+                passthroughBehavior: "when_no_match"
+                httpMethod: "POST"
+                contentHandling: "CONVERT_TO_TEXT"
+                type: "aws_proxy"
+        definitions:
+          User:
+            type: object
+            properties:
+              name:
+                type: string
+              url:
+                type: string
+      StageName: 'test'

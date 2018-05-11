@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+Description: >
+  AWS CloudFormation SAM Template updating - creating dynamo tables and streams
+Parameters:
+  ParentSamStack:
+    Description: Prefix Stack name of parent Sam stack.
+    Type: String
+  Bucket:
+    Description: Bucket name
+    Type: String
+Resources:
+  Registry:
+      Type: "AWS::DynamoDB::Table"
+      Properties:
+        TableName: !Sub '${ParentSamStack}-Registry'
+        AttributeDefinitions:
+           - AttributeName: name
+             AttributeType: S
+        KeySchema:
+           - AttributeName: name
+             KeyType: HASH
+        ProvisionedThroughput:
+           ReadCapacityUnits: 1
+           WriteCapacityUnits: 1
+Outputs:
+  Registry:
+    Value: !Ref Registry
+    Export:
+      Name: !Sub '${ParentSamStack}-Registry'

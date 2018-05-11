@@ -1,0 +1,289 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >
+  AWS CloudFormation Template Continuous Delivery: This template
+  builds an AWS CodePipeline pipeline that implements a continuous delivery release
+  process for AWS stacks.
+
+Parameters:
+  PipelineName:
+    Description: Serverless pipeline
+    Type: String
+  GitRepo:
+    Default: bartenderAsFunctionServer
+    Description: The file name of the git hub repository , such as lambda-test
+    Type: String
+  Owner:
+    Description: The owner of the github repository
+    Type: String
+    Default: dicaormu
+  OAuthToken:
+    Description: The OAuthToken of the github repository
+    Type: String
+  GitBranch:
+    Default: develop
+    Description: The git branch to work on.
+    Type: String
+    Default: master
+  PollForSourceChanges:
+    Default: true
+    Description: If the pipeline mush check if it has been changes in the source branche to commit
+    Type: String
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "CodePipeline Settings"
+        Parameters:
+          - PipelineName
+          - Owner
+          - GitRepo
+Resources:
+  ArtifactStoreBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      BucketName: !Sub 'pipeline-bartender-artifact-bucket'
+      VersioningConfiguration:
+        Status: Enabled
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      ArtifactStore:
+        Location: !Ref 'ArtifactStoreBucket'
+        Type: S3
+      DisableInboundStageTransitions: []
+      Name: !Sub '${PipelineName}'
+      RoleArn: !GetAtt [PipelineRole, Arn]
+      Stages:
+        - Name: GitSource
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Provider: GitHub
+                Version: '1'
+              Configuration:
+                Owner: !Ref 'Owner'
+                Repo: !Ref 'GitRepo'
+                PollForSourceChanges: !Ref 'PollForSourceChanges'
+                Branch: !Ref 'GitBranch'
+                #OAuthToken: !Ref 'OAuthToken'
+              OutputArtifacts:
+                - Name: Source
+              RunOrder: '1'
+        - Name: Build
+          Actions:
+            - Name: Build
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              InputArtifacts:
+                - Name: Source
+              OutputArtifacts:
+                - Name: AppBuild
+              Configuration:
+                ProjectName: !Ref 'BuildGo'
+              RunOrder: '1'
+        - Name: Deploy
+          Actions:
+          - Name: DeployApp
+            ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CloudFormation
+            InputArtifacts:
+              - Name: AppBuild
+            Configuration:
+                ActionMode: CHANGE_SET_REPLACE
+                StackName: !Sub '${GitRepo}'
+                ChangeSetName: !Sub '${GitRepo}'
+                TemplatePath: AppBuild::packaged.yml
+                ParameterOverrides: !Sub '{"Bucket":"${ArtifactStoreBucket}","ParentSamStack":"${GitRepo}"}'
+                RoleArn: !GetAtt [CFNRole, Arn]
+                Capabilities: CAPABILITY_IAM
+            RunOrder: 1
+          - Name: DeployDatabase
+            ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CloudFormation
+            InputArtifacts:
+              - Name: AppBuild
+            Configuration:
+                ActionMode: CHANGE_SET_REPLACE
+                StackName: !Sub 'Bartender-Database'
+                ChangeSetName: !Sub 'Bartender-Database'
+                TemplatePath: AppBuild::database-pipeline.yml
+                ParameterOverrides: !Sub '{"Bucket":"${ArtifactStoreBucket}","ParentSamStack":"${GitRepo}"}'
+                RoleArn: !GetAtt [CFNRole, Arn]
+                Capabilities: CAPABILITY_IAM
+            RunOrder: 1
+          - Name: ExecuteChangeSetDatabase
+            ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CloudFormation
+            InputArtifacts:
+              - Name: AppBuild
+            Configuration:
+                ActionMode: CHANGE_SET_EXECUTE
+                StackName: !Sub 'Bartender-Database'
+                ChangeSetName: !Sub 'Bartender-Database'
+                RoleArn: !GetAtt [CFNRole, Arn]
+            RunOrder: 2
+          - Name: ExecuteChangeSet
+            ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CloudFormation
+            InputArtifacts:
+              - Name: AppBuild
+            Configuration:
+                ActionMode: CHANGE_SET_EXECUTE
+                StackName: !Sub 'Bartender-${GitRepo}'
+                ChangeSetName: !Sub 'Bartender-${GitRepo}'
+                RoleArn: !GetAtt [CFNRole, Arn]
+            RunOrder: 3
+  CFNRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [cloudformation.amazonaws.com]
+        Version: '2012-10-17'
+      Path: /
+      Policies:
+        - PolicyName: CloudFormationRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                - 's3:*'
+                - 'cloudformation:CreateStack'
+                - 'cloudformation:DescribeStacks'
+                - 'cloudformation:DeleteStack'
+                - 'cloudformation:UpdateStack'
+                - 'cloudformation:CreateChangeSet'
+                - 'cloudformation:ExecuteChangeSet'
+                - 'cloudformation:DeleteChangeSet'
+                - 'cloudformation:DescribeChangeSet'
+                - 'cloudformation:SetStackPolicy'
+                - 'iam:CreateRole'
+                - 'iam:PassRole'
+                - 'iam:AttachRolePolicy'
+                - 'iam:DetachRolePolicy'
+                - 'iam:GetRole'
+                - 'iam:DeleteRole'
+                - 'iam:PutRolePolicy'
+                - 'iot:AddLoggingRole'
+                - 'iot:CreateTopicRule'
+                - 'iot:EnableTopicRule'
+                - 'iot:DeleteTopicRule'
+                - 'iot:ListAttachedPolicies'
+                - 'iot:DeletePolicy'
+                - 'iot:GetPolicy'
+                - 'iot:CreatePolicy'
+                - 'iam:DeleteRolePolicy'
+                - 'lambda:CreateFunction'
+                - 'lambda:AddPermission'
+                - 'lambda:CreateAlias'
+                - 'lambda:CreateEventSourceMapping'
+                - 'lambda:DeleteAlias'
+                - 'lambda:DeleteEventSourceMapping'
+                - 'lambda:DeleteFunction'
+                - 'lambda:GetFunctionConfiguration'
+                - 'lambda:UpdateFunctionCode'
+                - 'lambda:RemovePermission'
+                - 'lambda:ListTags'
+                - 'lambda:TagResource'
+                - 'lambda:UntagResource'
+                - 'lambda:UpdateFunctionConfiguration'
+                - 'lambda:GetEventSourceMapping'
+                - 'dynamodb:CreateTable'
+                - 'dynamodb:DescribeTable'
+                - 'dynamodb:DeleteTable'
+                - 'dynamodb:UpdateTable'
+                - 'apigateway:*'
+                - 'iot:ReplaceTopicRule'
+                Effect: Allow
+                Resource: '*'
+  PipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [codepipeline.amazonaws.com]
+        Version: '2012-10-17'
+      Path: /
+      Policies:
+        - PolicyName: CodePipelineAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                - 's3:*'
+                - 'cloudformation:CreateStack'
+                - 'cloudformation:DescribeStacks'
+                - 'cloudformation:DeleteStack'
+                - 'cloudformation:UpdateStack'
+                - 'cloudformation:CreateChangeSet'
+                - 'cloudformation:ExecuteChangeSet'
+                - 'cloudformation:DeleteChangeSet'
+                - 'cloudformation:DescribeChangeSet'
+                - 'cloudformation:SetStackPolicy'
+                - 'codebuild:StartBuild'
+                - 'codebuild:BatchGetProjects'
+                - 'codebuild:ListProjects'
+                - 'codebuild:StopBuild'
+                - 'codebuild:UpdateProject'
+                - 'codebuild:BatchGetBuilds'
+                - 'iam:PassRole'
+                Effect: Allow
+                Resource: '*'
+
+  BuildGo:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/golang:1.10
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: S3_BUCKET
+            Value: !Ref 'ArtifactStoreBucket'
+          - Name: ENV
+            Value: !Ref 'ENV'
+      Name: !Sub ${AWS::StackName}GoBuild
+      ServiceRole: !Ref GoBuildRole
+      Source:
+        Type: CODEPIPELINE
+  GoBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: Allow
+          Principal:
+            Service: codebuild.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
