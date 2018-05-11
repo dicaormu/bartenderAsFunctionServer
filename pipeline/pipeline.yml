@@ -9,6 +9,7 @@ Parameters:
   PipelineName:
     Description: Serverless pipeline
     Type: String
+    Default: bartenderserver-pipeline
   GitRepo:
     Default: bartenderAsFunctionServer
     Description: The file name of the git hub repository , such as lambda-test
@@ -70,7 +71,7 @@ Resources:
                 Repo: !Ref 'GitRepo'
                 PollForSourceChanges: !Ref 'PollForSourceChanges'
                 Branch: !Ref 'GitBranch'
-                #OAuthToken: !Ref 'OAuthToken'
+                OAuthToken: !Ref 'OAuthToken'
               OutputArtifacts:
                 - Name: Source
               RunOrder: '1'
@@ -268,8 +269,6 @@ Resources:
         EnvironmentVariables:
           - Name: S3_BUCKET
             Value: !Ref 'ArtifactStoreBucket'
-          - Name: ENV
-            Value: !Ref 'ENV'
       Name: !Sub ${AWS::StackName}GoBuild
       ServiceRole: !Ref GoBuildRole
       Source:

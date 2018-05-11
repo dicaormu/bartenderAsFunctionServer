@@ -35,6 +35,7 @@ phases:
       - go vet ./...
       # Run all tests included with the application
       - go test ./...
+      - chmod 755 build.sh
 
   build:
     commands:
