@@ -24,21 +24,15 @@ func Handler(event model.User) error {
 	}
 	var commands []model.Command
 	data, _ := ioutil.ReadAll(response.Body)
-	fmt.Println("data:", data)
-	json.Unmarshal([]byte(data), &commands)
+	fmt.Println("data:", string(data))
+	json.Unmarshal(data, &commands)
 
 	for counter, command := range commands {
 		if len(command.Beer) > 0 {
-			for _, beerItem := range command.Beer {
-				ii, _ := json.Marshal(beerItem)
-				http.Post(event.Url+"/command/"+command.IdCommand+"/beer/serve", "application/json", bytes.NewBuffer(ii))
-			}
+			serveItem(command.Beer, event.Url, command.IdCommand, "beer")
 		}
 		if len(command.Food) > 0 {
-			for _, foodItem := range command.Food {
-				ii, _ := json.Marshal(foodItem)
-				http.Post(event.Url+"/command/"+command.IdCommand+"/food/serve", "application/json", bytes.NewBuffer(ii))
-			}
+			serveItem(command.Food, event.Url, command.IdCommand, "food")
 		}
 		if counter > 10 {
 			break
@@ -48,12 +42,13 @@ func Handler(event model.User) error {
 	responseBill, err := http.Get(event.Url + "/bill")
 	if err != nil {
 		fmt.Println(err)
+		return nil
 	}
 	items := model.CommandRequest{}
 
 	dataBill, _ := ioutil.ReadAll(responseBill.Body)
-	fmt.Println("dataBill:", data)
-	json.Unmarshal([]byte(dataBill), &items)
+	fmt.Println("dataBill:", string(dataBill))
+	json.Unmarshal(dataBill, &items)
 
 	amt := 0
 	for _, beer := range items.Beer {
@@ -66,6 +61,17 @@ func Handler(event model.User) error {
 
 	fmt.Println("stats: ", stats)
 	return nil
+}
+
+func serveItem(items []model.Item, url string, idcommand string, typeItem string) {
+	for _, item := range items {
+		ii, _ := json.Marshal(item)
+		_, err := http.Post(url+"/command/"+idcommand+"/"+typeItem+"/serve", "application/json", bytes.NewBuffer(ii))
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+	}
 }
 
 func main() {
