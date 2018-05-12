@@ -26,6 +26,13 @@ Resources:
             RestApiId: !Ref BartenderServer
             Path: /registry
             Method: POST
+  LambdaServeUser:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: serveUser
+      Timeout: 10
+      Runtime: go1.x
+      CodeUri: bin/serveUser
   LambdaServeCommandProxy:
     Type: AWS::Serverless::Function
     Properties:
@@ -42,13 +49,6 @@ Resources:
         Variables:
           TABLE_REGISTRY: !Sub ${ParentSamStack}-Registry
           LAMBDA_SERVE_USER: !Ref ${LambdaServeUser}
-  LambdaServeUser:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: serveUser
-      Timeout: 10
-      Runtime: go1.x
-      CodeUri: bin/serveUser
   ScheduledRule:
     Type: "AWS::Events::Rule"
     Properties:

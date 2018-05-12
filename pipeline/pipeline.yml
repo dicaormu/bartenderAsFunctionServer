@@ -105,7 +105,7 @@ Resources:
                 StackName: !Sub '${GitRepo}'
                 ChangeSetName: !Sub '${GitRepo}'
                 TemplatePath: AppBuild::packaged.yml
-                ParameterOverrides: !Sub '{"Bucket":"${ArtifactStoreBucket}","ParentSamStack":"${GitRepo}"}'
+                ParameterOverrides: !Sub '{"ParentSamStack":"${GitRepo}"}'
                 RoleArn: !GetAtt [CFNRole, Arn]
                 Capabilities: CAPABILITY_IAM
             RunOrder: 1
