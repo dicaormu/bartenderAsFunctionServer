@@ -60,6 +60,10 @@ func Handler(event model.User) error {
 	stats := statistics{User: event.Name, Billed: amt}
 
 	fmt.Println("stats: ", stats)
+
+	ss, _ := json.Marshal(stats)
+	http.Post("https://serverless-dashboard.cleverapps.io/board/events", "application/json", bytes.NewBuffer(ss))
+
 	return nil
 }
 
