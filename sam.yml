@@ -48,7 +48,7 @@ Resources:
       Environment:
         Variables:
           TABLE_REGISTRY: !Sub ${ParentSamStack}-Registry
-          LAMBDA_SERVE_USER: !Ref ${LambdaServeUser}
+          LAMBDA_SERVE_USER: !Ref LambdaServeUser
   ScheduledRule:
     Type: "AWS::Events::Rule"
     Properties:
