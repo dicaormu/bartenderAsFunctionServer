@@ -65,7 +65,13 @@ func Handler(event model.User) error {
 
 func serveItem(items []model.Item, url string, idcommand string, typeItem string) {
 	for _, item := range items {
-		ii, _ := json.Marshal(item)
+		fmt.Println("serving:", item.Name)
+		ii, errm := json.Marshal(item)
+		if errm != nil {
+			fmt.Println(errm)
+			return
+		}
+		fmt.Println("calling:", url+"/command/"+idcommand+"/"+typeItem+"/serve")
 		_, err := http.Post(url+"/command/"+idcommand+"/"+typeItem+"/serve", "application/json", bytes.NewBuffer(ii))
 		if err != nil {
 			fmt.Println(err)
