@@ -150,8 +150,8 @@ Resources:
               - Name: AppBuild
             Configuration:
                 ActionMode: CHANGE_SET_EXECUTE
-                StackName: !Sub 'Bartender-${GitRepo}'
-                ChangeSetName: !Sub 'Bartender-${GitRepo}'
+                StackName: !Sub '${GitRepo}'
+                ChangeSetName: !Sub '${GitRepo}'
                 RoleArn: !GetAtt [CFNRole, Arn]
             RunOrder: 3
   CFNRole:
@@ -218,6 +218,13 @@ Resources:
                 - 'dynamodb:UpdateTable'
                 - 'apigateway:*'
                 - 'iot:ReplaceTopicRule'
+                - 'events:PutRule'
+                - 'events:DisableRule'
+                - 'events:ListRules'
+                - 'events:DescribeRule'
+                - 'events:RemoveTargets'
+                - 'events:PutTargets'
+                - 'events:DeleteRule'
                 Effect: Allow
                 Resource: '*'
   PipelineRole:
